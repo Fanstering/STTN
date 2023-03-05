@@ -49,7 +49,8 @@ class ZipReader(object):  ## 读取压缩文件函数
     @staticmethod
     def imread(path, video_name, image_name):  ## 从压缩包中返回指定的视频帧图片对象
         zfile = ZipReader.build_file_dict(path)
-        data = zfile.read(video_name + '/' + image_name)
+        # data = zfile.read(video_name + '/' + image_name)   linux下的目录
+        data = zfile.read(image_name)
         im = Image.open(io.BytesIO(data))
         return im
 

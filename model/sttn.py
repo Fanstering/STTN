@@ -215,7 +215,7 @@ class MultiHeadedAttention(nn.Module):
         x = self.output_linear(output)
         return x
 
-nn.utils.spectral_norm
+
 # Standard 2 layerd FFN of transformer
 class FeedForward(nn.Module):
     def __init__(self, d_model):
