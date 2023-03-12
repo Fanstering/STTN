@@ -32,7 +32,7 @@ class Trainer():
         self.config = config
         self.epoch = 0
         self.iteration = 0
-        if debug:    ## debug模式
+        if debug:
             self.config['trainer']['save_freq'] = 5
             self.config['trainer']['valid_freq'] = 5
             self.config['trainer']['iterations'] = 5
@@ -59,10 +59,10 @@ class Trainer():
         self.l1_loss = nn.L1Loss()
 
         # setup models including generator and discriminator
-        net = importlib.import_module('model.'+config['model'])  ## 动态导入sttn或者vis模块 两个模块内功能函数名称一样 且只会导入一个 所以采取动态导入
-        self.netG = net.InpaintGenerator()  ## 生成器模型
+        net = importlib.import_module('model.'+config['model'])
+        self.netG = net.InpaintGenerator()
         self.netG = self.netG.to(self.config['device'])
-        self.netD = net.Discriminator(   ## 判别器模型
+        self.netD = net.Discriminator(
             in_channels=3, use_sigmoid=config['losses']['GAN_LOSS'] != 'hinge')
         self.netD = self.netD.to(self.config['device'])
         self.optimG = torch.optim.Adam(
@@ -73,7 +73,7 @@ class Trainer():
             self.netD.parameters(), 
             lr=config['trainer']['lr'],
             betas=(self.config['trainer']['beta1'], self.config['trainer']['beta2']))
-        self.load()    ## 加载模型 要么是预训练的或者上一轮训练的 没有就算了
+        self.load()
 
         if config['distributed']:
             self.netG = DDP(
@@ -93,7 +93,7 @@ class Trainer():
         self.dis_writer = None
         self.gen_writer = None
         self.summary = {}
-        if self.config['global_rank'] == 0 or (not config['distributed']): ## 非分布式运算时  直接保存loss曲线
+        if self.config['global_rank'] == 0 or (not config['distributed']):
             self.dis_writer = SummaryWriter(
                 os.path.join(config['save_dir'], 'dis'))
             self.gen_writer = SummaryWriter(
@@ -104,7 +104,7 @@ class Trainer():
         return self.optimG.param_groups[0]['lr']
 
      # learning rate scheduler, step
-    def adjust_learning_rate(self):  ## 学习率衰减函数
+    def adjust_learning_rate(self):
         decay = 0.1**(min(self.iteration,
                           self.config['trainer']['niter_steady']) // self.config['trainer']['niter'])
         new_lr = self.config['trainer']['lr'] * decay
@@ -126,21 +126,20 @@ class Trainer():
     # load netG and netD
     def load(self):
         model_path = self.config['save_dir']
-        if os.path.isfile(os.path.join(model_path, 'latest.ckpt')):  ## 如果latest.ckpt文件存在的话 从该文件加载
+        if os.path.isfile(os.path.join(model_path, 'latest.ckpt')):
             latest_epoch = open(os.path.join(
-                model_path, 'latest.ckpt'), 'r').read().splitlines()[-1]  ## 返回文件的最后一行
-        else:  ## 否则加载pth文件
+                model_path, 'latest.ckpt'), 'r').read().splitlines()[-1]
+        else:
             ckpts = [os.path.basename(i).split('.pth')[0] for i in glob.glob(
-                os.path.join(model_path, '*.pth'))]  ##os.path.basename(i)返回路径i最后的文件名 所以 ckpts就是预训练模型目录下所有pth文件
-            # 不带扩展名的纯文件名列表
+                os.path.join(model_path, '*.pth'))]
             ckpts.sort()
-            latest_epoch = ckpts[-1] if len(ckpts) > 0 else None ## 如果有的话返回最后一个 没有就 None
-        if latest_epoch is not None:  ## 有预训练模型的话就加载
-            gen_path = os.path.join(  ## 生成器模型
-                model_path, 'gen_{}.pth'.format(str(latest_epoch).zfill(5)))  ## 还是熟悉的右对齐左补0凑5位数
-            dis_path = os.path.join(  ## 判别器模型
+            latest_epoch = ckpts[-1] if len(ckpts) > 0 else None
+        if latest_epoch is not None:
+            gen_path = os.path.join(
+                model_path, 'gen_{}.pth'.format(str(latest_epoch).zfill(5)))
+            dis_path = os.path.join(
                 model_path, 'dis_{}.pth'.format(str(latest_epoch).zfill(5)))
-            opt_path = os.path.join(  ## 优化器模型（其实就是超参数集）
+            opt_path = os.path.join(
                 model_path, 'opt_{}.pth'.format(str(latest_epoch).zfill(5)))
             if self.config['global_rank'] == 0:
                 print('Loading model from {}...'.format(gen_path))
@@ -153,7 +152,7 @@ class Trainer():
             self.optimD.load_state_dict(data['optimD'])
             self.epoch = data['epoch']
             self.iteration = data['iteration']
-        else:  ## 没有那就从0开始
+        else:
             if self.config['global_rank'] == 0:
                 print(
                     'Warnning: There is no trained model found. An initialized model will be used.')
@@ -184,17 +183,17 @@ class Trainer():
                                             os.path.join(self.config['save_dir'], 'latest.ckpt')))
 
     # train entry
-    def train(self):  ## 训练函数实体
-        pbar = range(int(self.train_args['iterations']))  ## 新的迭代次数
+    def train(self):
+        pbar = range(int(self.train_args['iterations']))
         if self.config['global_rank'] == 0:
             pbar = tqdm(pbar, initial=self.iteration, dynamic_ncols=True, smoothing=0.01)
-        ## dynamic_ncols=True持续改变进度条宽度   已存储的迭代次数作为初始值
+        
         while True:
             self.epoch += 1
             if self.config['distributed']:
                 self.train_sampler.set_epoch(self.epoch)
 
-            self._train_epoch(pbar)  ## 训练一轮次函数
+            self._train_epoch(pbar)
             if self.iteration > self.train_args['iterations']:
                 break
         print('\nEnd training....')
@@ -204,16 +203,16 @@ class Trainer():
         device = self.config['device']
 
         for frames, masks in self.train_loader:
-            self.adjust_learning_rate()  ## 调整学习率
+            self.adjust_learning_rate()
             self.iteration += 1
 
-            frames, masks = frames.to(device), masks.to(device) ## frames五个维度 [个数，时间帧个数，通道数，高，宽]
+            frames, masks = frames.to(device), masks.to(device)
             b, t, c, h, w = frames.size()
-            masked_frame = (frames * (1 - masks).float())  ## masks是除了遮罩区域外全黑 两者相乘后遮罩区域黑，其余区域正常
+            masked_frame = (frames * (1 - masks).float())
             pred_img = self.netG(masked_frame, masks)
             frames = frames.view(b*t, c, h, w)
             masks = masks.view(b*t, 1, h, w)
-            comp_img = frames*(1.-masks) + masks*pred_img  ## 将生成的图像的遮罩部分补到masked_frame上 得到尝试修补的图像
+            comp_img = frames*(1.-masks) + masks*pred_img
 
             gen_loss = 0
             dis_loss = 0

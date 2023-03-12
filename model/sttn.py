@@ -111,7 +111,7 @@ class InpaintGenerator(BaseNetwork):
         output = torch.tanh(output)
         return output
 
-    def infer(self, feat, masks):
+    def infer(self, feat, masks):  # 测试的时候用
         t, c, h, w = masks.size()
         masks = masks.view(t, c, h, w)
         masks = F.interpolate(masks, scale_factor=1.0/4)
@@ -174,24 +174,29 @@ class MultiHeadedAttention(nn.Module):
     def forward(self, x, m, b, c):
         bt, _, h, w = x.size()
         t = bt // b
-        d_k = c // len(self.patchsize)
+        d_k = c // len(self.patchsize)  # 多头，按照patch scale分为了4组
         output = []
         _query = self.query_embedding(x)
         _key = self.key_embedding(x)
         _value = self.value_embedding(x)
+        # zip(x,y)会把可迭代对象x和y变成[(x1，y1),(x2,y2)……]的形式，也就是把几个可迭代对象组合成一个可迭代元素列表，每次i迭代的是对应的xi和yi元素的元组
+        # 用于使几个列表可以同时参与同一个循环的迭代
+        # torch.chunk(tensor, chunks, dim)等价于tensor.chunk(chunks,dim),在指定维度分块
+        # 这里使用zip和chunk使得patchsize列表和按照len(patchsize)分块后的query/key同时参与for循环，以便取出指定尺寸的头能取出对应大小的patch，互不干涉
+        # STTN中多头的实现方式就是不同的head对应不同的patch scale，所以几种patch尺度就是几个头
         for (width, height), query, key, value in zip(self.patchsize,
                                                       torch.chunk(_query, len(self.patchsize), dim=1), torch.chunk(
                                                           _key, len(self.patchsize), dim=1),
                                                       torch.chunk(_value, len(self.patchsize), dim=1)):
-            out_w, out_h = w // width, h // height
+            out_w, out_h = w // width, h // height  # 特征图宽高除以patchsize得到结果的宽高（out_w*out_h=patch的个数）
             mm = m.view(b, t, 1, out_h, height, out_w, width)
             mm = mm.permute(0, 1, 3, 5, 2, 4, 6).contiguous().view(
-                b,  t*out_h*out_w, height*width)
+                b,  t*out_h*out_w, height*width)  # patch_m序列化
             mm = (mm.mean(-1) > 0.5).unsqueeze(1).repeat(1, t*out_h*out_w, 1)
             # 1) embedding and reshape
             query = query.view(b, t, d_k, out_h, height, out_w, width)
             query = query.permute(0, 1, 3, 5, 2, 4, 6).contiguous().view(
-                b,  t*out_h*out_w, d_k*height*width)
+                b,  t*out_h*out_w, d_k*height*width) # patch序列化
             key = key.view(b, t, d_k, out_h, height, out_w, width)
             key = key.permute(0, 1, 3, 5, 2, 4, 6).contiguous().view(
                 b,  t*out_h*out_w, d_k*height*width)
@@ -211,7 +216,7 @@ class MultiHeadedAttention(nn.Module):
             y = y.view(b, t, out_h, out_w, d_k, height, width)
             y = y.permute(0, 1, 4, 2, 5, 3, 6).contiguous().view(bt, d_k, h, w)
             output.append(y)
-        output = torch.cat(output, 1)
+        output = torch.cat(output, 1)  # 再把多头合并回来
         x = self.output_linear(output)
         return x
 

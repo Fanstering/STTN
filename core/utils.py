@@ -23,21 +23,20 @@ import torch.distributed as dist
 
 import matplotlib
 from matplotlib import pyplot as plt
-
 matplotlib.use('agg')
 
 
 # #####################################################
 # #####################################################
 
-class ZipReader(object):  ## 读取压缩文件函数
+class ZipReader(object):
     file_dict = dict()
 
     def __init__(self):
         super(ZipReader, self).__init__()
 
     @staticmethod
-    def build_file_dict(path):  ## 按指定目录读取
+    def build_file_dict(path):
         file_dict = ZipReader.file_dict
         if path in file_dict:
             return file_dict[path]
@@ -47,13 +46,11 @@ class ZipReader(object):  ## 读取压缩文件函数
             return file_dict[path]
 
     @staticmethod
-    def imread(path, video_name, image_name):  ## 从压缩包中返回指定的视频帧图片对象
+    def imread(path, image_name):
         zfile = ZipReader.build_file_dict(path)
-        # data = zfile.read(video_name + '/' + image_name)   linux下的目录
         data = zfile.read(image_name)
         im = Image.open(io.BytesIO(data))
         return im
-
 
 # ###########################################################################
 # ###########################################################################
@@ -66,14 +63,7 @@ class GroupRandomHorizontalFlip(object):
     def __init__(self, is_flow=False):
         self.is_flow = is_flow
 
-    def __call__(self, img_group, is_flow=False):  ## 重写了call函数以后 这个类就变成了可调用对象
-        ## 类后一个括号是实例化  重写了 call函数后就可以跟第二个括号，第二个括号的作用是调用类中的__call__函数
-        ## 所以会有一种情况 类后直接跟两个括号 代表我直接实例化加调用call函数 即：
-        ## A()() 代表实例化同时调用A.__call__()函数
-        ## 相当于
-        # b = A()
-        # b()
-        ## 所以第一个括号的参数是给__init__函数的   第二个括号的参数是给__call__函数的
+    def __call__(self, img_group, is_flow=False):
         v = random.random()
         if v < 0.5:
             ret = [img.transpose(Image.FLIP_LEFT_RIGHT) for img in img_group]
@@ -101,9 +91,7 @@ class Stack(object):
             if self.roll:
                 return np.stack([np.array(x)[:, :, ::-1] for x in img_group], axis=2)
             else:
-                # print('Stack: ', img_group)
-                # print('after Stack: ', np.stack(img_group, axis=2).shape)
-                return np.stack(img_group, axis=2)  ##
+                return np.stack(img_group, axis=2)
         else:
             raise NotImplementedError(f"Image mode {mode}")
 
@@ -123,13 +111,10 @@ class ToTorchFormatTensor(object):
             # handle PIL Image
             img = torch.ByteTensor(
                 torch.ByteStorage.from_buffer(pic.tobytes()))
-            # print(img)
             img = img.view(pic.size[1], pic.size[0], len(pic.mode))
-            # print(img)
             # put it from HWC to CHW format
             # yikes, this transpose takes 80% of the loading time/CPU
             img = img.transpose(0, 1).transpose(0, 2).contiguous()
-            # torch.contiguous() 方法首先拷贝了一份张量在内存中的地址，然后将地址按照形状改变后的张量的语义进行排列。
         img = img.float().div(255) if self.div else img.float()
         return img
 
@@ -137,38 +122,37 @@ class ToTorchFormatTensor(object):
 # ##########################################
 # ##########################################
 
-## 用随机动作创建随机形状的遮罩
 def create_random_shape_with_random_motion(video_length, imageHeight=240, imageWidth=432):
     # get a random shape
-    height = random.randint(imageHeight // 3, imageHeight - 1)
-    width = random.randint(imageWidth // 3, imageWidth - 1)
-    edge_num = random.randint(6, 8)  ## 边界
-    ratio = random.randint(6, 8) / 10  ## 比率
+    height = random.randint(imageHeight//3, imageHeight-1)
+    width = random.randint(imageWidth//3, imageWidth-1)
+    edge_num = random.randint(6, 8)
+    ratio = random.randint(6, 8)/10
     region = get_random_shape(
         edge_num=edge_num, ratio=ratio, height=height, width=width)
     region_width, region_height = region.size
     # get random position
     x, y = random.randint(
-        0, imageHeight - region_height), random.randint(0, imageWidth - region_width)
-    velocity = get_random_velocity(max_speed=3)  ## 获取随机速度
+        0, imageHeight-region_height), random.randint(0, imageWidth-region_width)
+    velocity = get_random_velocity(max_speed=3)
     m = Image.fromarray(np.zeros((imageHeight, imageWidth)).astype(np.uint8))
-    m.paste(region, (y, x, y + region.size[0], x + region.size[1]))  ## 将mask贴在区域上
+    m.paste(region, (y, x, y+region.size[0], x+region.size[1]))
     masks = [m.convert('L')]
     # return fixed masks
-    if random.uniform(0, 1) > 0.5:  ## 随机实数大于0.5  也就是一半的可能用固定遮罩
-        return masks * video_length  ## 每个视频帧都用一样的遮罩
+    if random.uniform(0, 1) > 0.5:
+        return masks*video_length
     # return moving masks
-    for _ in range(video_length - 1):  ## 另一半可能则使用移动遮罩 也就是随机移动
+    for _ in range(video_length-1):
         x, y, velocity = random_move_control_points(
             x, y, imageHeight, imageWidth, velocity, region.size, maxLineAcceleration=(3, 0.5), maxInitSpeed=3)
         m = Image.fromarray(
             np.zeros((imageHeight, imageWidth)).astype(np.uint8))
-        m.paste(region, (y, x, y + region.size[0], x + region.size[1]))
+        m.paste(region, (y, x, y+region.size[0], x+region.size[1]))
         masks.append(m.convert('L'))
     return masks
 
 
-def get_random_shape(edge_num=9, ratio=0.7, width=432, height=240):  ## 返回一个随机形状的区域
+def get_random_shape(edge_num=9, ratio=0.7, width=432, height=240):
     '''
       There is the initial point and 3 points per cubic bezier curve. 
       Thus, the curve will only pass though n points, which will be the sharp edges.
@@ -177,13 +161,13 @@ def get_random_shape(edge_num=9, ratio=0.7, width=432, height=240):  ## 返回�
       points_num, number of points in the Path
       ratio, (0, 1) magnitude of the perturbation from the unit circle, 
     '''
-    points_num = edge_num * 3 + 1  ## 路径点个数
-    angles = np.linspace(0, 2 * np.pi, points_num)  ## 在0到2π之间均匀分布points_num个数字
+    points_num = edge_num*3 + 1
+    angles = np.linspace(0, 2*np.pi, points_num)
     codes = np.full(points_num, Path.CURVE4)
     codes[0] = Path.MOVETO
     # Using this instad of Path.CLOSEPOLY avoids an innecessary straight line
     verts = np.stack((np.cos(angles), np.sin(angles))).T * \
-            (2 * ratio * np.random.random(points_num) + 1 - ratio)[:, None]
+        (2*ratio*np.random.random(points_num)+1-ratio)[:, None]
     verts[-1, :] = verts[0, :]
     path = Path(verts, codes)
     # draw paths into images
@@ -191,8 +175,8 @@ def get_random_shape(edge_num=9, ratio=0.7, width=432, height=240):  ## 返回�
     ax = fig.add_subplot(111)
     patch = patches.PathPatch(path, facecolor='black', lw=2)
     ax.add_patch(patch)
-    ax.set_xlim(np.min(verts) * 1.1, np.max(verts) * 1.1)
-    ax.set_ylim(np.min(verts) * 1.1, np.max(verts) * 1.1)
+    ax.set_xlim(np.min(verts)*1.1, np.max(verts)*1.1)
+    ax.set_ylim(np.min(verts)*1.1, np.max(verts)*1.1)
     ax.axis('off')  # removes the axis to leave only the shape
     fig.canvas.draw()
     # convert plt images into numpy images
@@ -201,7 +185,7 @@ def get_random_shape(edge_num=9, ratio=0.7, width=432, height=240):  ## 返回�
     plt.close(fig)
     # postprocess
     data = cv2.resize(data, (width, height))[:, :, 0]
-    data = (1 - np.array(data > 0).astype(np.uint8)) * 255
+    data = (1 - np.array(data > 0).astype(np.uint8))*255
     corrdinates = np.where(data > 0)
     xmin, xmax, ymin, ymax = np.min(corrdinates[0]), np.max(
         corrdinates[0]), np.min(corrdinates[1]), np.max(corrdinates[1])
@@ -236,8 +220,7 @@ def get_random_velocity(max_speed=3, dist='uniform'):
     return (speed, angle)
 
 
-def random_move_control_points(X, Y, imageHeight, imageWidth, lineVelocity, region_size, maxLineAcceleration=(3, 0.5),
-                               maxInitSpeed=3):
+def random_move_control_points(X, Y, imageHeight, imageWidth, lineVelocity, region_size, maxLineAcceleration=(3, 0.5), maxInitSpeed=3):
     region_width, region_height = region_size
     speed, angle = lineVelocity
     X += int(speed * np.cos(angle))
@@ -251,22 +234,20 @@ def random_move_control_points(X, Y, imageHeight, imageWidth, lineVelocity, regi
     return new_X, new_Y, lineVelocity
 
 
+
 # ##############################################
 # ##############################################
 
 if __name__ == '__main__':
 
-    # trials = 10
-    # for _ in range(trials):
-    #     video_length = 10
-    #     # The returned masks are either stationary (50%) or moving (50%)
-    #     masks = create_random_shape_with_random_motion(
-    #         video_length, imageHeight=240, imageWidth=432)
-    #
-    #     for m in masks:
-    #         cv2.imshow('mask', np.array(m))
-    #         cv2.waitKey(500)
-    z = ZipReader()
+    trials = 10
+    for _ in range(trials):
+        video_length = 10
+        # The returned masks are either stationary (50%) or moving (50%)
+        masks = create_random_shape_with_random_motion(
+            video_length, imageHeight=240, imageWidth=432)
 
-    img = z.imread("../datasets/davis/JPEGImages/bear.zip","bear","00011.jpg").convert('RGB')
-    print(img)
+        for m in masks:
+            cv2.imshow('mask', np.array(m))
+            cv2.waitKey(500)
+
