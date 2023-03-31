@@ -50,10 +50,15 @@ class Dataset(torch.utils.data.Dataset):  ## 重写了DataLoader需要的Dataset
     def load_item(self, index):  ## 具体取数据操作
 
         video_name = self.video_names[index]  ## 用视频名称取出视频每一帧名称都是5位数字
-        ## str.zfill(int)  指定字符串长度，右对齐，左边填充0
-        all_frames = [f"{str(i).zfill(5)}.jpg" for i in range(self.video_dict[video_name])]  ## 获取该压缩文件中每个视频帧的文件名
+        # str.zfill(int)  指定字符串长度，右对齐，左边填充0
+        # 获取该压缩文件中每个视频帧的文件名 这里由bug:数据集中有很多不是从00000开始的文件名，导致读取这些视频时会报错
+        # all_frames = [f"{str(i).zfill(5)}.jpg" for i in range(self.video_dict[video_name])]
+        ziptemp = zipfile.ZipFile('{}/{}/JPEGImages/{}.zip'.format(
+            self.args['data_root'], self.args['name'], video_name))
+        all_frames = ziptemp.namelist()
         all_masks = create_random_shape_with_random_motion(
             len(all_frames), imageHeight=self.h, imageWidth=self.w)  ## 获取了所有视频帧的遮罩 可能为固定遮罩，也可能是移动遮罩
+
         ## 在某个压缩包内随机挑选sample_length个倒霉蛋（默认5个） 也就是一段视频中默认有5个视频帧是有mask的
         ref_index = get_ref_index(len(all_frames), self.sample_length)
         # read video frames
