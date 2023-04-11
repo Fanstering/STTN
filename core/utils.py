@@ -76,6 +76,7 @@ class GroupRandomHorizontalFlip(object):
         ## 所以第一个括号的参数是给__init__函数的   第二个括号的参数是给__call__函数的
         v = random.random()
         if v < 0.5:
+            # img.transpose(Image.FLIP_LEFT_RIGHT) 对img做水平翻转
             ret = [img.transpose(Image.FLIP_LEFT_RIGHT) for img in img_group]
             if self.is_flow:
                 for i in range(0, len(ret), 2):
@@ -103,7 +104,7 @@ class Stack(object):
             else:
                 # print('Stack: ', img_group)
                 # print('after Stack: ', np.stack(img_group, axis=2).shape)
-                return np.stack(img_group, axis=2)  ##
+                return np.stack(img_group, axis=2)  # np.stack将多个array在指定维度拼接成一个多了一维的array，
         else:
             raise NotImplementedError(f"Image mode {mode}")
 
@@ -140,9 +141,10 @@ class ToTorchFormatTensor(object):
 ## 用随机动作创建随机形状的遮罩
 def create_random_shape_with_random_motion(video_length, imageHeight=240, imageWidth=432):
     # get a random shape
+    # 高宽随机范围是1/3~1比例的原尺寸
     height = random.randint(imageHeight // 3, imageHeight - 1)
     width = random.randint(imageWidth // 3, imageWidth - 1)
-    edge_num = random.randint(6, 8)  ## 边界
+    edge_num = random.randint(6, 8)  ## 边界数
     ratio = random.randint(6, 8) / 10  ## 比率
     region = get_random_shape(
         edge_num=edge_num, ratio=ratio, height=height, width=width)
@@ -180,10 +182,13 @@ def get_random_shape(edge_num=9, ratio=0.7, width=432, height=240):  ## 返回�
     points_num = edge_num * 3 + 1  ## 路径点个数
     angles = np.linspace(0, 2 * np.pi, points_num)  ## 在0到2π之间均匀分布points_num个数字
     codes = np.full(points_num, Path.CURVE4)
+    # Path.CURVE4表示路径： 2个控制点，一个终点。使用指定的2个控制点从当前位置画三次赛贝尔曲线到指定的结束位置
     codes[0] = Path.MOVETO
     # Using this instad of Path.CLOSEPOLY avoids an innecessary straight line
+    # 在cos和sin函数上分别均匀地取points_num个值拼接到一起组成2*points_num维的数组，再逐元素乘一个(-ratio+1,ratio+1)范围的随机数
     verts = np.stack((np.cos(angles), np.sin(angles))).T * \
             (2 * ratio * np.random.random(points_num) + 1 - ratio)[:, None]
+    # array[:,None] 将array每个元素变成单独一维 形变： (28) -> (28,1)
     verts[-1, :] = verts[0, :]
     path = Path(verts, codes)
     # draw paths into images
@@ -256,17 +261,17 @@ def random_move_control_points(X, Y, imageHeight, imageWidth, lineVelocity, regi
 
 if __name__ == '__main__':
 
-    # trials = 10
-    # for _ in range(trials):
-    #     video_length = 10
-    #     # The returned masks are either stationary (50%) or moving (50%)
-    #     masks = create_random_shape_with_random_motion(
-    #         video_length, imageHeight=240, imageWidth=432)
-    #
-    #     for m in masks:
-    #         cv2.imshow('mask', np.array(m))
-    #         cv2.waitKey(500)
-    z = ZipReader()
+    trials = 10
+    for _ in range(trials):
+        video_length = 10
+        # The returned masks are either stationary (50%) or moving (50%)
+        masks = create_random_shape_with_random_motion(
+            video_length, imageHeight=240, imageWidth=432)
 
-    img = z.imread("../datasets/davis/JPEGImages/bear.zip","bear","00011.jpg").convert('RGB')
-    print(img)
+        for m in masks:
+            cv2.imshow('mask', np.array(m))
+            cv2.waitKey(500)
+    # z = ZipReader()
+    #
+    # img = z.imread("../datasets/davis/JPEGImages/bear.zip","bear","00011.jpg").convert('RGB')
+    # print(img)

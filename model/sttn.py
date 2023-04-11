@@ -106,7 +106,7 @@ class InpaintGenerator(BaseNetwork):
         _, c, h, w = enc_feat.size()
         masks = F.interpolate(masks, scale_factor=1.0/4)
         enc_feat = self.transformer(
-            {'x': enc_feat, 'm': masks, 'b': b, 'c': c})['x']
+            {'x': enc_feat, 'm': masks, 'b': b, 'c': c})['y']
         output = self.decoder(enc_feat)
         output = torch.tanh(output)
         return output
@@ -117,7 +117,7 @@ class InpaintGenerator(BaseNetwork):
         masks = F.interpolate(masks, scale_factor=1.0/4)
         t, c, _, _ = feat.size()
         enc_feat = self.transformer(
-            {'x': feat, 'm': masks, 'b': 1, 'c': c})['x']
+            {'x': feat, 'm': masks, 'b': 1, 'c': c})['y']
         return enc_feat
 
 
@@ -246,7 +246,7 @@ class TransformerBlock(nn.Module):
         x, m, b, c = x['x'], x['m'], x['b'], x['c']
         x = x + self.attention(x, m, b, c)
         x = x + self.feed_forward(x)
-        return {'x': x, 'm': m, 'b': b, 'c': c}
+        return {'y': x, 'm': m, 'b': b, 'c': c}
 
 
 # ######################################################################
