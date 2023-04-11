@@ -182,14 +182,18 @@ def get_random_shape(edge_num=9, ratio=0.7, width=432, height=240):  ## 返回�
     points_num = edge_num * 3 + 1  ## 路径点个数
     angles = np.linspace(0, 2 * np.pi, points_num)  ## 在0到2π之间均匀分布points_num个数字
     codes = np.full(points_num, Path.CURVE4)
+    # plt.path是plt绘图的最高级用法，plt的所有简单形状绘图函数都是通过path实现的
+    # 教程：https://blog.csdn.net/qq_27825451/article/details/82967904
     # Path.CURVE4表示路径： 2个控制点，一个终点。使用指定的2个控制点从当前位置画三次赛贝尔曲线到指定的结束位置
     codes[0] = Path.MOVETO
     # Using this instad of Path.CLOSEPOLY avoids an innecessary straight line
-    # 在cos和sin函数上分别均匀地取points_num个值拼接到一起组成2*points_num维的数组，再逐元素乘一个(-ratio+1,ratio+1)范围的随机数
+    # 在cos和sin函数上分别均匀地取points_num个值拼接到一起组成（2，points_num）的数组，再逐元素乘一个(-ratio+1,ratio+1)范围的随机数
     verts = np.stack((np.cos(angles), np.sin(angles))).T * \
             (2 * ratio * np.random.random(points_num) + 1 - ratio)[:, None]
     # array[:,None] 将array每个元素变成单独一维 形变： (28) -> (28,1)
+    # 路径的首尾相接形成封闭图形
     verts[-1, :] = verts[0, :]
+    # vertices(简称verts) 是点的坐标，codes是点之间路径的轨迹类型（直线、曲线等）
     path = Path(verts, codes)
     # draw paths into images
     fig = plt.figure()
