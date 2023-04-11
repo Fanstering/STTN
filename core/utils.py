@@ -144,6 +144,9 @@ def create_random_shape_with_random_motion(video_length, imageHeight=240, imageW
     # 高宽随机范围是1/3~1比例的原尺寸
     height = random.randint(imageHeight // 3, imageHeight - 1)
     width = random.randint(imageWidth // 3, imageWidth - 1)
+    # height = random.randint(imageHeight-2, imageHeight - 1)
+    # width = random.randint(imageWidth-2, imageWidth - 1)
+    # 上面的测试证明了这里的宽高并不是结果中的宽高
     edge_num = random.randint(6, 8)  ## 边界数
     ratio = random.randint(6, 8) / 10  ## 比率
     region = get_random_shape(
@@ -187,7 +190,7 @@ def get_random_shape(edge_num=9, ratio=0.7, width=432, height=240):  ## 返回�
     # Path.CURVE4表示路径： 2个控制点，一个终点。使用指定的2个控制点从当前位置画三次赛贝尔曲线到指定的结束位置
     codes[0] = Path.MOVETO
     # Using this instad of Path.CLOSEPOLY avoids an innecessary straight line
-    # 在cos和sin函数上分别均匀地取points_num个值拼接到一起组成（2，points_num）的数组，再逐元素乘一个(-ratio+1,ratio+1)范围的随机数
+    # 在cos和sin函数上分别均匀地取points_num个值拼接到一起组成（2，points_num）的数组,数组内包含的数据是若干个在同一个圆上的坐标点，再逐元素乘一个(-ratio+1,ratio+1)范围的随机数
     verts = np.stack((np.cos(angles), np.sin(angles))).T * \
             (2 * ratio * np.random.random(points_num) + 1 - ratio)[:, None]
     # array[:,None] 将array每个元素变成单独一维 形变： (28) -> (28,1)
@@ -195,20 +198,25 @@ def get_random_shape(edge_num=9, ratio=0.7, width=432, height=240):  ## 返回�
     verts[-1, :] = verts[0, :]
     # vertices(简称verts) 是点的坐标，codes是点之间路径的轨迹类型（直线、曲线等）
     path = Path(verts, codes)
+    # 到目前为止 只是确定了形状，还没有确定Mask的大小相对于源输入图像的比例
     # draw paths into images
     fig = plt.figure()
     ax = fig.add_subplot(111)
     patch = patches.PathPatch(path, facecolor='black', lw=2)
     ax.add_patch(patch)
+    # 这里直接乘1.1是因为坐标点最初绕中心圆均匀分布，所以一定有正有负
     ax.set_xlim(np.min(verts) * 1.1, np.max(verts) * 1.1)
     ax.set_ylim(np.min(verts) * 1.1, np.max(verts) * 1.1)
     ax.axis('off')  # removes the axis to leave only the shape
     fig.canvas.draw()
     # convert plt images into numpy images
+    # fig 转 rgbString(一维 432*288*3） 转 array（一维 432*288*3）
     data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+    # 一维reshape到canvas尺寸
     data = data.reshape((fig.canvas.get_width_height()[::-1] + (3,)))
     plt.close(fig)
     # postprocess
+    # 黑白图，三维都一样，只取一维
     data = cv2.resize(data, (width, height))[:, :, 0]
     data = (1 - np.array(data > 0).astype(np.uint8)) * 255
     corrdinates = np.where(data > 0)
